@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>ProxyRelay</title>
+  <link rel="shortcut icon" href="favicon.ico">
+  <link rel="stylesheet" href="style.css">
+  <script src="chart.umd.js"></script>
+</head>
+<body>
+  <!-- ヘッダー：共通操作 -->
+  <div class="header">
+    <div class="status-group">
+      <div class="status-item" title="Httpd Reboot" onclick="controlSrv('httpd-reboot','httpd reboot')">
+        <span id="dot-httpd" class="dot off"></span> Httpd
+      </div>
+      <div class="status-item" title="Proxy On/Off" onclick="controlSrv('proxy-toggle','proxy on/off')">
+        <span id="dot-proxy" class="dot off"></span> Proxy
+      </div>
+      
+      <div class="traffic-monitor" title="Traffic Speed">
+        <span class="up-arrow">▲</span><span id="speed-sent" class="speed-wrapper"></span>
+        <span class="down-arrow">▼</span><span id="speed-recv" class="speed-wrapper"></span>
+      </div>
+      
+      <div class="action-group">
+        <button class="btn-main" onclick="controlSrv('start-all','start proxy')">Start</button>
+        <button class="btn-gray" onclick="controlSrv('stop-all','stop proxy')">Stop</button>
+        <button class="btn-danger" onclick="controlSrv('quit','quit application')">Quit</button>
+        <button class="btn-danger btn-close" onclick="controlSrv('close','close tab')" title="Close Tab">×</button>
+      </div>
+      
+    </div>
+    
+  </div>
+  
+  <!-- タブメニュー -->
+  <div class="tabs">
+    <button id="tab-log" class="tab-btn active" onclick="switchTab('log')">Log</button>
+    <button id="tab-stats" class="tab-btn" onclick="switchTab('stats')">Stats</button>
+    <button id="tab-settings" class="tab-btn" onclick="switchTab('settings')">Settings</button>
+  </div>
+  
+  <!-- コンテンツエリア -->
+  <div class="main-container">
+    
+    <!-- Logタブ -->
+    <div id="log" class="view-content active">
+      <div class="log-controls">
+        <div class="log-level-ctl">
+          <label>Proxy Log Level:</label>
+          <div class="custom-log-level">
+            <div id="log-level-display" class="level-trigger" onclick="toggleLogLevelList(event)">
+              0: None
+            </div>
+            <div id="log-level-options" class="level-options">
+              <div class="level-item" onclick="changeLogLevel(0, '0: None')">0: None</div>
+              <div class="level-item" onclick="changeLogLevel(1, '1: Error/Warning')">1: Error/Warning</div>
+              <div class="level-item" onclick="changeLogLevel(2, '2: Connect/Auth')">2: Connect/Auth</div>
+            </div>
+          </div>
+        </div>
+        <span id="last-update" class="update-info">Last update: --:--:--</span>
+        <button id="pause-btn" class="pause-btn" onclick="togglePause()">Pause Log</button>
+      </div>
+      <div id="log-container">Loading logs...</div>
+    </div>
+    
+    <!-- Statsタブ -->
+    <div id="stats" class="view-content">
+      <div class="stats-head">Traffic Monitor (Last 120sec)</div>
+      <div class="stats-chart-container">
+        <canvas id="trafficChart"></canvas>
+      </div>
+    </div>
+    
+    <!-- Settingsタブ -->
+    <div id="settings" class="view-content">
+      <div class="settings-head">
+        <div class="section-head">Typical settings</div>
+        <button class="btn-gray" onclick="loadSettings(true)">Reload from INI file</button>
+      </div>
+      <div class="settings-wrapper">
+        
+        <div class="settings-section">
+          <div class="section-title" onclick="toggleSection(this)">[Proxy]</div>
+          <div class="section-content">
+            <div class="settings-grid">
+              <label>Upstream: (Auth) UserName <span class="delay-info" data-delay="1">*1</span></label>
+              <input type="text" id="cfg-user" placeholder="Empty both (Auth) to delete saved credentials.">
+              <label>Upstream: (Auth) Password <span class="delay-info" data-delay="1">*1</span></label>
+              <input type="password" id="cfg-pass" placeholder="Enter only if you wish to make changes.">
+              <label>Upstream: URL <span class="delay-info" data-delay="1">*1</span></label>
+              <input type="text" id="cfg-upstream">
+              <label>Listener: ProxyPort <span class="delay-info" data-delay="2">*2</span></label>
+              <input type="text" id="cfg-proxy-port" placeholder="If empty, this port will be assigned automatically.">
+            </div>
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <div class="section-title" onclick="toggleSection(this)">[General]</div>
+          <div class="section-content">
+            <div class="settings-grid">
+              <label>Proxy Relay Autostart <span class="delay-info" data-delay="2">*2</span></label>
+              <div class="settings-grid-check-wrap">
+                <input type="checkbox" id="cfg-autostart">
+                <span class="settings-text">
+                  Start proxy relay on application launch.
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="settings-section last">
+          <div class="section-title collapsed" onclick="toggleSection(this)">[Pac]</div>
+          <div class="section-content hidden">
+            <div class="settings-grid">
+              <label>(Original) Url <span class="delay-info" data-delay="1">*1</span></label>
+              <input type="text" id="cfg-pac-url">
+              <label>(Mod) Prefix <span class="delay-info" data-delay="1">*1</span></label>
+              <input type="text" id="cfg-pac-prefix">
+            </div>
+            <label class="settings-name-label">(Mod) RuleFile <span class="delay-info" data-delay="1">*1</span></label> <span class="settings-text">( %PORT% = ProxyPort (Listener) )</span>
+            <textarea id="pac-content"></textarea>
+          </div>
+        </div>
+
+      </div>
+      <div class="settings-foot">
+        <button id="save-btn" class="btn-main foot" onclick="saveSettings()">Save to INI file</button>
+      </div>
+    </div>
+  </div>
+  
+  <!-- 通知エリア -->
+  <div id="toast-container"></div>
+  
+  <!-- 動作定義 -->
+  <script src="script.js"></script>
+</body>
+</html>

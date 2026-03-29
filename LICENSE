@@ -1,6 +1,6 @@
 MIT License
 
-Copyright (c) 2026 hfftjp
+Copyright (c) 2026 hfft.jp
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -19,3 +19,12 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+---------------------------------------------------------------------------
+本ソフトウェアはMITライセンスのもとで公開されています。
+
+実質的に制限なく利用可能ですが、著作権表示および本許諾表示をソフトウェアの
+すべての複製または重要な部分に記載する必要があります。
+
+ソフトウェアは「現状のまま」提供され、明示的か黙示的かを問わず、いかなる保証もありません。
+作者または著作権保持者は、ソフトウェアに起因して生じた損害について、一切の責任を負いません。

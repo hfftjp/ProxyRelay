@@ -1,0 +1,38 @@
+﻿#pragma code_page(65001)
+
+#define IDR_MAINICON 1
+#define IDR_MANIFEST 1
+
+IDR_MAINICON ICON "icons/icon.ico"
+IDR_MANIFEST 24 "proxyrelay.manifest"
+
+1 VERSIONINFO
+FILEVERSION     1,0,0,0
+PRODUCTVERSION  1,0,0,0
+FILEFLAGSMASK   0x3fL
+FILEFLAGS       0x0L
+FILEOS          0x40004L
+FILETYPE        0x1L
+FILESUBTYPE     0x0L
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        // 0411 = Japanese, 04b0 = Unicode (1200)
+        BLOCK "041104b0"
+        BEGIN
+            VALUE "CompanyName",      "hfft.jp"
+            VALUE "FileDescription",  "ProxyRelay"
+            VALUE "FileVersion",      "1.0.0.0"
+            VALUE "InternalName",     "proxyrelay"
+            VALUE "LegalCopyright",   "Copyright (C) 2026 hfft.jp"
+            VALUE "OriginalFilename", "proxyrelay.exe"
+            VALUE "ProductName",      "ProxyRelay"
+            VALUE "ProductVersion",   "1.0.0.0"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        // 0x0411 = Japanese, 1200 = Unicode
+        VALUE "Translation", 0x0411, 1200
+    END
+END
