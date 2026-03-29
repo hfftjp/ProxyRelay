@@ -1,1 +1,24 @@
 # ProxyRelay
+
+Windows向けのプロキシ中継ツールです。
+
+
+## 特徴 / Features
+・・・後ほど・・・
+
+
+## 使用方法 / Usage
+・・・後ほど・・・
+
+
+## ビルド方法 / How to Build
+・・・後ほど・・・
+
+
+## ライセンス / License
+- **This Project**: [MIT License](LICENSE)
+- **Third-Party Components**: See [THIRD-PARTY-NOTICES.txt](THIRD-PARTY-NOTICES.txt) for details.
+
+## 免責事項 / Disclaimer
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+本ソフトウェアの使用により生じた損害について、作者は一切の責任を負いません。利用者の責任において使用してください。
