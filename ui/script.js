@@ -35,28 +35,22 @@ async function controlSrv(action,msg) {
     case 'quit':
       showToast('Terminaing...', 'error');
       break;
-    case 'close':
-      window.open('about:blank', '_self').close();
-      document.body.innerHTML = '<h1 style="text-align:center; margin-top:20%;">Server Terminated.<br>You can close this tab.</h1>';
-      break;
   }
-  if (action !== 'close') {
-    try {
-      const response = await fetch('/api/control?action=' + action, { method: 'POST' });
-      if (action === 'quit' && response.ok) {
-        setTimeout(() => {
-          window.open('about:blank', '_self').close();
-          document.body.innerHTML = '<h1 style="text-align:center; margin-top:20%;">Server Terminated.<br>You can close this tab.</h1>';
-        }, 500);
-        return;
-      }
-    } catch (e) {
-      if (action !== 'quit') {
-        showToast('Failed to communicate with server', 'error');
-      }
+  try {
+    const response = await fetch('/api/control?action=' + action, { method: 'POST' });
+    if (action === 'quit' && response.ok) {
+      setTimeout(() => {
+        window.open('about:blank', '_self').close();
+        document.body.innerHTML = '<h1 style="text-align:center; margin-top:20%;">Server Terminated.<br>You can close this tab.</h1>';
+      }, 500);
+      return;
     }
-    updateStatus();
+  } catch (e) {
+    if (action !== 'quit') {
+      showToast('Failed to communicate with server', 'error');
+    }
   }
+  updateStatus();
 }
 
 // 通知表示
@@ -353,8 +347,10 @@ function togglePause() {
 
 // ログ読み込み(logタブ時のみ)
 let currentLogOffset = -1;
+let isLogUpdating = false;
 async function updateLog() {
-  if (actTab !== 'log' || isPaused) return;
+  if (actTab !== 'log' || isPaused || isLogUpdating) return;
+  isLogUpdating = true;
   const el = document.getElementById('log-container');
   try {
     const res = await fetch(`/api/log?offset=${currentLogOffset}`);
@@ -402,6 +398,8 @@ async function updateLog() {
     if (currentLogOffset === -1) {
       el.innerText = `Connection Error: ${e.message}`;
     }
+  } finally {
+    isLogUpdating = false;
   }
 }
 
@@ -409,20 +407,6 @@ async function updateLog() {
 function toggleLogLevelList(e) {
   e.stopPropagation();
   document.getElementById('log-level-options').classList.toggle('show');
-}
-
-// 選択と反映(logタブ)
-async function changeLogLevel(val, text) {
-  try {
-    const res = await fetch(`/api/set-log-level?level=${val}`);
-    if (res.ok) {
-      document.getElementById('log-level-display').innerText = text;
-      document.getElementById('log-level-options').classList.remove('show');
-      showToast(`Log level changed to ${val}`);
-    }
-  } catch (e) {
-    console.error("LogLevel change error:", e);
-  }
 }
 
 // ログレベル変更(logタブ)
@@ -462,19 +446,16 @@ window.addEventListener('click', () => {
 });
 
 // 定期実行登録・初期実行
-async function onTimer() {
-  updateStatus();
-  updateNotifications();
-  updateTraffic();
-  updateTrafficHistory();
-  updateLog();
+async function poll(fn) {
+  await fn().catch(() => {});
+  setTimeout(() => poll(fn), 2000);
 }
-setInterval(onTimer, 2000);
-
-updateStatus();
-updateTraffic();
+poll(updateStatus);
+poll(updateNotifications);
+poll(updateTraffic);
+poll(updateTrafficHistory);
 loadCurrentLogLevel();
-updateLog();
+poll(updateLog);
 loadSettings(false);
 
 // 全ての入力欄の補完・スペルチェックを強制オフにする

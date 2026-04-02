@@ -53,7 +53,7 @@ func loadAccessLists() {
 	DenyList = loadList(DENY_PATH)
 }
 
-// アクセス制限内容判定
+// アクセス制限内容判定 ( *XXX , XXX* , *XXX* のみ )
 func wildcardMatch(pattern, host string) bool {
 	if !strings.Contains(pattern, "*") {
 		return host == pattern
@@ -138,8 +138,10 @@ func monitorTraffic() {
 	for range ticker.C {
 		s := atomic.SwapUint64(&TotalSentBytes, 0)
 		r := atomic.SwapUint64(&TotalRecvBytes, 0)
-		HistorySent = append(HistorySent[1:], s)
-		HistoryRecv = append(HistoryRecv[1:], r)
+		copy(HistorySent, HistorySent[1:])
+		HistorySent[historyMax-1] = s
+		copy(HistoryRecv, HistoryRecv[1:])
+		HistoryRecv[historyMax-1] = r
 		if IsProxyRun {
 			if s > 1024 || r > 1024 {
 				setBusyIcon()
@@ -353,6 +355,15 @@ func handleHTTP(w http.ResponseWriter, r *http.Request, tr *http.Transport) {
 	writeProxyLog(2, "LOG", "CONNECT: HTTP: %s -> %s %s", r.RemoteAddr, r.Method, r.URL.String())
 	removeHopHeaders(r.Header)
 	applyProxyAuth(r)
+	if r.Body != nil {
+		r.Body = struct {
+			io.Reader
+			io.Closer
+		}{
+			Reader: io.TeeReader(r.Body, &countWriter{Writer: io.Discard, count: &TotalSentBytes}),
+			Closer: r.Body,
+		}
+	}
 	resp, err := tr.RoundTrip(r)
 	if err != nil {
 		writeProxyLog(1, "ERROR", "HTTP RoundTrip failed: %v", err)

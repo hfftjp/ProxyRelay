@@ -30,6 +30,10 @@ var (
 	procWideCharToMultiByte = modkernel32.NewProc("WideCharToMultiByte")
 )
 
+var (
+	portRegex = regexp.MustCompile(`(\d+)/(tcp|udp)`)
+)
+
 // 文字コード(UTF-8/SJIS)を自動判別してUTF-8文字列を返す
 func autoDecode(data []byte) string {
 	if len(data) == 0 {
@@ -171,8 +175,7 @@ func stopHook() {
 // BAT実行内判定ロジック(Port/Proc)(1111/tcp 形式, app.exe:N 形式)
 func checkCondition(wPort, wProc string) bool {
 	if wPort != "" {
-		re := regexp.MustCompile(`(\d+)/(tcp|udp)`)
-		m := re.FindStringSubmatch(wPort)
+		m := portRegex.FindStringSubmatch(wPort)
 		if len(m) == 3 {
 			port, proto := m[1], m[2]
 			cmdStr := fmt.Sprintf("netstat -an | findstr LISTENING | findstr :%s", port)

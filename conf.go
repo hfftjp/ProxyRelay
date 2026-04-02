@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"gopkg.in/ini.v1"
 	"os"
@@ -276,7 +277,7 @@ func generateDefault(v interface{}) *ini.File {
 				if idx == 0 {
 					formatted = " " + line
 				} else {
-					formatted += "\n; " + line
+					formatted += "\r\n; " + line
 				}
 			}
 			key.Comment = formatted
@@ -382,5 +383,5 @@ func encodeToSJIS(s string) []byte {
 	procWideCharToMultiByte.Call(
 		uintptr(CP_932), 0, uintptr(unsafe.Pointer(&pUtf16[0])), uintptr(len(pUtf16)),
 		uintptr(unsafe.Pointer(&res[0])), resSize, 0, 0)
-	return []byte(strings.TrimRight(string(res), "\x00"))
+	return bytes.TrimRight(res, "\x00")
 }

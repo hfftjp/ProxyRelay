@@ -27,6 +27,13 @@ body {
   flex-direction: column;
   height: 100vh;
   overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+input, textarea {
+  user-select: text;
+  -webkit-user-select: text;
 }
 
 /* ボタン共通 */
@@ -54,11 +61,6 @@ button.foot {
 .btn-danger {
   background: var(--danger-color);
   color: var(--highlight-color);
-}
-
-.btn-close {
-  margin-left: auto;
-  font-weight: bold;
 }
 
 /* 通知メッセージ用スタイル */
@@ -158,6 +160,7 @@ button.foot {
   gap: 5px;
   font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
   font-size: 13px;
+  font-variant-numeric: tabular-nums;
 }
 
 .speed-wrapper {
@@ -312,8 +315,14 @@ button.foot {
   font-family: 'Consolas', monospace;
   font-size: 12px;
   white-space: pre-wrap;
+  overflow-wrap: break-word;
+  word-break: break-all;
   border: 1px solid var(--border-color);
   border-radius: 4px;
+  user-select: text;
+  -webkit-user-select: text;
+  scroll-behavior: auto;
+  overflow-anchor: none;
 }
 
 .log-err {

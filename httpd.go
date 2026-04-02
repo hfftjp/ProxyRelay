@@ -137,7 +137,19 @@ func startHttpd() bool {
 			action := r.URL.Query().Get("action")
 			switch action {
 			case "httpd-reboot":
-				go func() { stopHttpd(); startHttpd() }()
+				go func() {
+					if !stopHttpd() {
+						notify("ERROR", "Httpd", "Reboot failed.")
+						return
+					}
+					for i := 0; i < 10; i++ {
+						time.Sleep(200 * time.Millisecond)
+						if startHttpd() {
+							return
+						}
+					}
+					notify("ERROR", "Httpd", "Reboot failed after retries.")
+				}()
 			case "proxy-toggle":
 				if IsProxyRun {
 					stopProxyRelay()
