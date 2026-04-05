@@ -43,7 +43,7 @@ func getRegistryState() (RegState, error) {
 func backupRegistry() bool {
 	s, err := getRegistryState()
 	if err != nil {
-		logOutput("ERROR", "REG", "getRegistry: %v", err)
+		notify("ERROR", "REG", "getRegistry: %v", err)
 		return false
 	}
 	if !ReloadCfg() {
@@ -55,7 +55,7 @@ func backupRegistry() bool {
 	sec.Key("ProxyServer").SetValue(s.Server)
 	sec.Key("ProxyOverride").SetValue(s.Override)
 	if err := saveAsSJIS(cfg, CONF_PATH); err != nil {
-		logOutput("ERROR", "REG", "Settings save failed. %v", err)
+		notify("ERROR", "REG", "Settings save failed. %v", err)
 		return false
 	}
 	logOutput("INFO", "REG", "Backup saved to ini.")
@@ -98,7 +98,7 @@ func setRegistryOn() bool {
 	if mode == 1 {
 		pac := GetStringSafe(cfg.Section("Pac").Key("PacName"))
 		if pac == "" {
-			logOutput("ERROR", "REG", "Mode 1: PacName is empty.")
+			notify("ERROR", "REG", "Mode 1: PacName is empty.")
 			return false
 		}
 	}
@@ -117,7 +117,7 @@ func setRegistryOn() bool {
 		s = RegState{Enable: 1, Server: "127.0.0.1:" + strconv.Itoa(getCurrentProxyPort()), Override: override}
 	}
 	applyRegistry(s)
-	logOutput("INFO", "REG", "Proxy settings have been changed.")
+	notify("INFO", "REG", "Proxy settings have been changed.")
 	logOutput("LOG", "REG", "After : E:%d, P:%s, S:%s, O:%s", s.Enable, s.PAC, s.Server, s.Override)
 	return true
 }
@@ -163,7 +163,7 @@ func setRegistryOff() bool {
 		}
 		applyRegistry(s)
 	}
-	logOutput("INFO", "REG", "Proxy settings have been restored.")
+	notify("INFO", "REG", "Proxy settings have been restored.")
 	sAfter, _ := getRegistryState()
 	logOutput("LOG", "REG", "After : E:%d, P:%s, S:%s, O:%s", sAfter.Enable, sAfter.PAC, sAfter.Server, sAfter.Override)
 	return true

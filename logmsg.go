@@ -69,7 +69,6 @@ func PushNotification(nType, message string) {
 	}
 	go func() {
 		stackMu.Lock()
-		defer stackMu.Unlock()
 		now := time.Now()
 		dropCount := 0
 		for _, old := range notifyStack {
@@ -88,6 +87,8 @@ func PushNotification(nType, message string) {
 			notifyStack = notifyStack[1:]
 		}
 		notifyStack = append(notifyStack, n)
+		stackMu.Unlock()
+		triggerNotify()
 	}()
 }
 
@@ -156,28 +157,17 @@ func notify(level, from, message string, v ...interface{}) {
 	}
 	updateIcon()
 	var (
-		lvstr   string
-		lvcolor uint32
+		lvstr string
 	)
 	switch level {
 	case "ERROR":
 		lvstr = "error"
-		lvcolor = NotifyError
 	case "INFO":
 		lvstr = "success"
-		lvcolor = NotifyInfo
 	default:
 		lvstr = "success"
-		lvcolor = NotifyNormal
 	}
 	PushNotification(lvstr, fmt.Sprintf("%s: %s", from, fmt.Sprintf(message, v...)))
-	if NotifyEnable == 1 {
-		ShowCustomNotification(NotifyConfig{
-			Title:    fmt.Sprintf("%s: %s", from, fmt.Sprintf(message, v...)),
-			Duration: 3 * time.Second,
-			Color:    lvcolor,
-		})
-	}
 }
 
 // メッセージボックス表示
