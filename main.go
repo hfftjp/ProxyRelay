@@ -14,11 +14,12 @@ import (
 )
 
 var (
-	modkernel32       = syscall.NewLazyDLL("kernel32.dll")
-	modshell32        = syscall.NewLazyDLL("shell32.dll")
-	procCreateMutex   = modkernel32.NewProc("CreateMutexW")
-	procCloseHandle   = modkernel32.NewProc("CloseHandle")
-	procShellExecuteW = modshell32.NewProc("ShellExecuteW")
+	modkernel32          = syscall.NewLazyDLL("kernel32.dll")
+	modshell32           = syscall.NewLazyDLL("shell32.dll")
+	procCreateMutex      = modkernel32.NewProc("CreateMutexW")
+	procCloseHandle      = modkernel32.NewProc("CloseHandle")
+	procShellExecuteW    = modshell32.NewProc("ShellExecuteW")
+	procWaitForSingleObj = modkernel32.NewProc("WaitForSingleObject")
 )
 
 const (
@@ -55,8 +56,10 @@ var iconBusyE []byte
 var (
 	IsHttpdRun       bool
 	CurrentHttpdPort int
+	CurrentHttpdAddr string
 	IsProxyRun       bool
 	CurrentProxyPort int
+	CurrentProxyAddr string
 	SkipTrayUpdate   bool
 )
 
@@ -65,7 +68,71 @@ var (
 	mStartAll      *systray.MenuItem
 	mStopAll       *systray.MenuItem
 	lastIconStatus int
+	hIconEvent     uintptr
+	IsBusy         bool
 )
+
+// トレーアイコン更新
+func iconUpdater() {
+	h, _, _ := procCreateEventW.Call(0, 0, 0, 0)
+	hIconEvent = h
+	if hIconEvent == 0 {
+		showMessage("ERROR", "iconUpdater", "load error")
+		return
+	}
+	defer procCloseHandle.Call(hIconEvent)
+	for {
+		ret, _, _ := procWaitForSingleObj.Call(hIconEvent, 0xFFFFFFFF)
+		if !SkipTrayUpdate {
+			if ret == WAIT_OBJECT_0 {
+				newIconStatus := 10
+				if IsProxyRun {
+					newIconStatus += 10
+					if IsBusy {
+						newIconStatus += 10
+					}
+				}
+				if ErrorNotice {
+					newIconStatus += 1
+				}
+				if lastIconStatus != newIconStatus {
+					lastIconStatus = newIconStatus
+					switch newIconStatus {
+					case 31:
+						systray.SetIcon(iconBusyE)
+					case 30:
+						systray.SetIcon(iconBusy)
+					case 21:
+						systray.SetIcon(iconRunE)
+					case 20:
+						systray.SetIcon(iconRun)
+					case 11:
+						systray.SetIcon(iconStopE)
+					default:
+						systray.SetIcon(iconStop)
+					}
+				}
+			}
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+}
+
+// トレーアイコン更新要求
+func requestIconUpdate(busy ...bool) {
+	if len(busy) > 0 {
+		IsBusy = busy[0]
+	}
+	if hIconEvent != 0 {
+		procSetEvent.Call(hIconEvent)
+	}
+}
+
+// エラー通知アイコンリセット
+func ResetErrorNotice() {
+	ErrorNotice = false
+	requestIconUpdate()
+}
 
 // 起動処理
 func main() {
@@ -73,6 +140,7 @@ func main() {
 	isProcessing = false
 	SkipTrayUpdate = false
 	ErrorNotice = false
+	IsBusy = false
 	if !LoadCfg() {
 		os.Exit(1)
 	}
@@ -85,59 +153,11 @@ func main() {
 	systray.Run(onReady, onExit)
 }
 
-// エラー通知アイコン
-func ResetErrorNotice() {
-	ErrorNotice = false
-	updateIcon()
-}
-
-// トレーアイコン更新
-func updateIcon() {
-	if IsProxyRun {
-		if ErrorNotice {
-			if lastIconStatus != 21 {
-				systray.SetIcon(iconRunE)
-				lastIconStatus = 21
-			}
-		} else {
-			if lastIconStatus != 20 {
-				systray.SetIcon(iconRun)
-				lastIconStatus = 20
-			}
-		}
-	} else {
-		if ErrorNotice {
-			if lastIconStatus != 11 {
-				systray.SetIcon(iconStopE)
-				lastIconStatus = 11
-			}
-		} else {
-			if lastIconStatus != 10 {
-				systray.SetIcon(iconStop)
-				lastIconStatus = 10
-			}
-		}
-	}
-}
-
-func setBusyIcon() {
-	if ErrorNotice {
-		if lastIconStatus != 31 {
-			systray.SetIcon(iconBusyE)
-			lastIconStatus = 31
-		}
-	} else {
-		if lastIconStatus != 30 {
-			systray.SetIcon(iconBusy)
-			lastIconStatus = 30
-		}
-	}
-}
-
 // メイン動作＋タスクトレーメニューイベント
 func onReady() {
 	systray.SetTooltip(APP_NAME)
-	updateIcon()
+	systray.SetIcon(iconStop)
+	go iconUpdater()
 	if !startHttpd() {
 		showMessage("ERROR", "SYS", "Httpd startup error")
 		systray.Quit()
@@ -288,27 +308,27 @@ func truncateString(s string, maxLen int) string {
 // トレーの状態更新
 func refreshMenu() {
 	var httpdStatus, proxyStatus string
-	if IsProxyRun {
-		mStartAll.Disable()
-		mStopAll.Enable()
-	} else {
-		mStartAll.Enable()
-		mStopAll.Disable()
-	}
-	if !IsHttpdRun || CurrentHttpdPort == 0 {
-		httpdStatus = "-----"
-	} else {
-		httpdStatus = strconv.Itoa(CurrentHttpdPort)
-	}
-	if !IsProxyRun || CurrentProxyPort == 0 {
-		proxyStatus = "-----"
-		mStatus.SetIcon(iconStop)
-	} else {
-		proxyStatus = strconv.Itoa(CurrentProxyPort)
-		mStatus.SetIcon(iconBusy)
-	}
-	mStatus.SetTitle(fmt.Sprintf("Proxy:%5s, Httpd:%5s", proxyStatus, httpdStatus))
 	if !SkipTrayUpdate {
+		if IsProxyRun {
+			mStartAll.Disable()
+			mStopAll.Enable()
+		} else {
+			mStartAll.Enable()
+			mStopAll.Disable()
+		}
+		if !IsHttpdRun || CurrentHttpdPort == 0 {
+			httpdStatus = "-----"
+		} else {
+			httpdStatus = strconv.Itoa(CurrentHttpdPort)
+		}
+		if !IsProxyRun || CurrentProxyPort == 0 {
+			proxyStatus = "-----"
+			mStatus.SetIcon(iconStop)
+		} else {
+			proxyStatus = strconv.Itoa(CurrentProxyPort)
+			mStatus.SetIcon(iconBusy)
+		}
+		mStatus.SetTitle(fmt.Sprintf("Proxy:%5s, Httpd:%5s", proxyStatus, httpdStatus))
 		systray.SetTooltip(fmt.Sprintf("%s\n%s", APP_NAME, fmt.Sprintf("Proxy:%5s, Httpd:%5s", proxyStatus, httpdStatus)))
 	}
 }
@@ -326,8 +346,8 @@ func PerformStartAll(showmsgbox ...bool) {
 	if len(showmsgbox) > 0 {
 		showflg = showmsgbox[0]
 	}
-	setBusyIcon()
-	defer updateIcon()
+	requestIconUpdate(true)
+	defer requestIconUpdate(false)
 	stopHook()
 	if !runHookWithConfig("PreStart") {
 		if showflg {
@@ -383,8 +403,8 @@ func PerformStopAll(showmsgbox ...bool) {
 	if len(showmsgbox) > 0 {
 		showflg = showmsgbox[0]
 	}
-	setBusyIcon()
-	defer updateIcon()
+	requestIconUpdate(true)
+	defer requestIconUpdate(false)
 	stopHook()
 	if !runHookWithConfig("PreStop") {
 		if showflg {
@@ -409,7 +429,6 @@ func PerformStopAll(showmsgbox ...bool) {
 			showLogMBox("ERROR", "PostStop")
 		}
 	}
-	updateIcon()
 }
 
 // 停止処理(前後処理省略)

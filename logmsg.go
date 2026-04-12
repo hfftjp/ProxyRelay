@@ -88,7 +88,9 @@ func PushNotification(nType, message string) {
 		}
 		notifyStack = append(notifyStack, n)
 		stackMu.Unlock()
-		triggerNotify()
+		if NotifyEnable == 1 {
+			triggerNotify()
+		}
 	}()
 }
 
@@ -155,7 +157,7 @@ func notify(level, from, message string, v ...interface{}) {
 	if level == "ERROR" {
 		ErrorNotice = true
 	}
-	updateIcon()
+	requestIconUpdate()
 	var (
 		lvstr string
 	)

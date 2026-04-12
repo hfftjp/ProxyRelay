@@ -1,3 +1,89 @@
+// セッション管理
+let sessionID = null;
+
+// 画面のグレーアウト
+function lockInterface(msg) {
+  if (document.getElementById('lockinterface-overlay')) return;
+  isLogUpdating = true;
+  isPaused = true;
+  let msg2 = "";
+  if (msg === "Access Denied") {
+    msg2 = "Please close this duplicate tab, OR reopen the dashboard from the application.";
+  } else {
+    msg2 = "The connection was lost. Please close this tab.";
+  }
+  const overlay = document.createElement('div');
+  overlay.id = 'lockinterface-overlay';
+  overlay.style = `
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    background: rgba(0,0,0,0.8); color: #ffffff; z-index: 10000;
+    display: flex; align-items: center; justify-content: center;
+    font-family: sans-serif; text-align: center; font-size: 20px;
+    flex-direction: column;
+  `;
+  overlay.innerHTML = `
+    <div>
+      <h1 style="margin-bottom:16px;">${msg}</h1>
+      <p>${msg2}</p>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  document.body.style.pointerEvents = 'none';
+  window.stop();
+}
+
+// 共通フェッチ関数（セッションヘッダー自動付与）
+async function secureFetch(url, options = {}) {
+  if (!options.headers) options.headers = {};
+  if (sessionID) {
+    options.headers['X-Session-ID'] = sessionID;
+  }
+  try {
+    const res = await fetch(url, options);
+    if (res.status === 403) {
+      lockInterface("Access Denied");
+      throw new Error("Session Invalid");
+    }
+    return res;
+  } catch (e) {
+    if (e.message === "Session Invalid") throw e;
+    lockInterface("Disconnected");
+    throw e;
+  }
+}
+
+// 起動時のセッション確立
+async function initSession() {
+  if (window.SESSION_ID) {
+    sessionID = window.SESSION_ID;
+    return true;
+  }
+  const urlParams = new URLSearchParams(window.location.search);
+  let key = urlParams.get('key');
+  if (!key) {
+    lockInterface("Access Denied");
+    return false;
+  }
+  window.history.replaceState({}, document.title, window.location.pathname);
+  try {
+    const res = await fetch('/api/exchange', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ key: key })
+    });
+    if (!res.ok) {
+      lockInterface("Access Denied");
+      return false;
+    }
+    const data = await res.json();
+    sessionID = data.sessionID;
+    return true;
+  } catch (e) {
+    lockInterface("Access Denied");
+    return false;
+  }
+}
+
 // タブ切替
 let actTab = "log";
 function switchTab(viewId) {
@@ -12,7 +98,7 @@ function switchTab(viewId) {
 // ヘッダステータス更新
 async function updateStatus() {
   try {
-    const res = await fetch('/api/status');
+    const res = await secureFetch('/api/status');
     const s = await res.json();
     document.getElementById('dot-httpd').className = s.httpd ? 'dot on' : 'dot off';
     document.getElementById('dot-proxy').className = s.proxy ? 'dot on' : 'dot off';
@@ -37,16 +123,16 @@ async function controlSrv(action,msg) {
       break;
   }
   try {
-    const response = await fetch('/api/control?action=' + action, { method: 'POST' });
+    const response = await secureFetch('/api/control?action=' + action, { method: 'POST' });
     if (action === 'quit' && response.ok) {
       setTimeout(() => {
         window.open('about:blank', '_self').close();
-        document.body.innerHTML = '<h1 style="text-align:center; margin-top:20%;">Server Terminated.<br>You can close this tab.</h1>';
+        lockInterface("Disconnected");
       }, 500);
       return;
     }
   } catch (e) {
-    if (action !== 'quit') {
+    if (action !== 'quit' && e.message !== "Session Invalid") {
       showToast('Failed to communicate with server', 'error');
     }
   }
@@ -72,7 +158,7 @@ let lastNotifyID = 0;
 let isFirstNotifyPoll = true;
 async function updateNotifications() {
   try {
-    const res = await fetch(`/api/notifications?last_id=${lastNotifyID}`);
+    const res = await secureFetch(`/api/notifications?last_id=${lastNotifyID}`);
     if (!res.ok) return;
     const data = await res.json();
     if (!data || data.length === 0) {
@@ -101,7 +187,7 @@ async function updateNotifications() {
 // 通信速度情報更新
 async function updateTraffic() {
   try {
-    const res = await fetch('/api/traffic');
+    const res = await secureFetch('/api/traffic');
     const data = await res.json();
     formatSpeedFull(data.sent, 'speed-sent');
     formatSpeedFull(data.recv, 'speed-recv');
@@ -135,7 +221,7 @@ let trafficChart = null;
 async function updateTrafficHistory() {
   if (actTab !== 'stats') return;
   try {
-    const res = await fetch('/api/traffic-history');
+    const res = await secureFetch('/api/traffic-history');
     const data = await res.json();
     if (!trafficChart) initChart();
     trafficChart.data.datasets[0].data = data.sent_history.map(b => (b / 1024).toFixed(1));
@@ -262,7 +348,7 @@ function toggleSection(titleEl) {
 // 設定読み込み(settingsタブ)
 async function loadSettings(force = false) {
   try {
-    const res = await fetch('/api/read-config');
+    const res = await secureFetch('/api/read-config');
     const s = await res.json();
     const fields = {
       'cfg-autostart': s.autoStart,
@@ -286,7 +372,9 @@ async function loadSettings(force = false) {
     }
     if(force) showToast('Settings reloaded from server.');
   } catch (e) {
-    showToast('Failed to load settings: ' + e, 'error');
+    if (e.message !== "Session Invalid") {
+      showToast('Failed to load settings: ' + e, 'error');
+    }
   }
 }
 
@@ -316,7 +404,7 @@ async function saveSettings() {
     pacContent: document.getElementById('pac-content').value
   };
   try {
-    const res = await fetch('/api/save-config', {
+    const res = await secureFetch('/api/save-config', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify(data)
@@ -330,7 +418,9 @@ async function saveSettings() {
       showToast('Save failed : ' + errText, 'error');
     }
   } catch (e) {
-    showToast('A communication error has occurred.', 'error');
+    if (e.message !== "Session Invalid") {
+      showToast('A communication error has occurred.', 'error');
+    }
   } finally {
     btn.disabled = false;
   }
@@ -353,7 +443,7 @@ async function updateLog() {
   isLogUpdating = true;
   const el = document.getElementById('log-container');
   try {
-    const res = await fetch(`/api/log?offset=${currentLogOffset}`);
+    const res = await secureFetch(`/api/log?offset=${currentLogOffset}`);
     if (!res.ok) {
       throw new Error(`HTTP error! status: ${res.status}`);
     }
@@ -395,7 +485,7 @@ async function updateLog() {
     currentLogOffset = newOffset;
     document.getElementById('last-update').innerText = 'Last update: ' + new Date().toLocaleTimeString();
   } catch (e) {
-    if (currentLogOffset === -1) {
+    if (currentLogOffset === -1 && e.message !== "Session Invalid") {
       el.innerText = `Connection Error: ${e.message}`;
     }
   } finally {
@@ -412,7 +502,7 @@ function toggleLogLevelList(e) {
 // ログレベル変更(logタブ)
 async function changeLogLevel(val, text) {
   try {
-    const res = await fetch(`/api/set-log-level?level=${val}`);
+    const res = await secureFetch(`/api/set-log-level?level=${val}`);
     if (res.ok) {
       document.getElementById('log-level-display').innerText = text;
       document.getElementById('log-level-options').classList.remove('show');
@@ -426,7 +516,7 @@ async function changeLogLevel(val, text) {
 // 現在のログレベルをサーバーから取得してUIに反映(logタブ)
 async function loadCurrentLogLevel() {
   try {
-    const res = await fetch('/api/get-log-level');
+    const res = await secureFetch('/api/get-log-level');
     const data = await res.json();
     const levels = {
       0: '0: None',
@@ -446,17 +536,22 @@ window.addEventListener('click', () => {
 });
 
 // 定期実行登録・初期実行
-async function poll(fn) {
-  await fn().catch(() => {});
-  setTimeout(() => poll(fn), 2000);
+async function initApp() {
+  const ok = await initSession();
+  if (!ok) return;
+  async function poll(fn) {
+    await fn().catch(() => {});
+    setTimeout(() => poll(fn), 2000);
+  }
+  poll(updateStatus);
+  poll(updateNotifications);
+  poll(updateTraffic);
+  poll(updateTrafficHistory);
+  loadCurrentLogLevel();
+  poll(updateLog);
+  loadSettings(false);
 }
-poll(updateStatus);
-poll(updateNotifications);
-poll(updateTraffic);
-poll(updateTrafficHistory);
-loadCurrentLogLevel();
-poll(updateLog);
-loadSettings(false);
+initApp();
 
 // 全ての入力欄の補完・スペルチェックを強制オフにする
 document.querySelectorAll('input, textarea').forEach(el => {

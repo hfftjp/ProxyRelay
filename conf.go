@@ -17,11 +17,12 @@ import (
 // 設定項目一覧
 type AppConfig struct {
 	// [General]
-	AutoPortMin  int    `sec:"General" ini:"AutoPortMin"  default:"20000" comment:"自動割り当てにおいて空きポートを探す範囲"`
-	AutoPortMax  int    `sec:"General" ini:"AutoPortMax"  default:"29999" comment:""`
-	AutoStart    int    `sec:"General" ini:"AutoStart"    default:"0"     comment:"起動時にProxy中継を開始 1:有効, 0:無効"`
-	NotifyEnable int    `sec:"General" ini:"NotifyEnable" default:"1"     comment:"処理完了時の通知 1:有効, 0:無効"`
-	HttpdPort    string `sec:"General" ini:"HttpdPort"    default:""      comment:"httpdが待ち受けるポート番号 (空なら自動割り当て)"`
+	AutoPortMin  int    `sec:"General" ini:"AutoPortMin"  default:"20000"     comment:"自動割り当てにおいて空きポートを探す範囲"`
+	AutoPortMax  int    `sec:"General" ini:"AutoPortMax"  default:"29999"     comment:""`
+	AutoStart    int    `sec:"General" ini:"AutoStart"    default:"0"         comment:"起動時にProxy中継を開始 1:有効, 0:無効"`
+	NotifyEnable int    `sec:"General" ini:"NotifyEnable" default:"1"         comment:"処理完了時の通知 1:有効, 0:無効(エラーダイアログ), -1:無効(ダイアログなし)"`
+	HttpdPort    string `sec:"General" ini:"HttpdPort"    default:""          comment:"httpdが待ち受けるポート番号 (空なら自動割り当て)"`
+	HttpdAddr    string `sec:"General" ini:"HttpdAddr"    default:"127.0.0.1" comment:"httpdが待ち受けるアドレス (空なら全アドレス対象)"`
 
 	// [Log]
 	LogDir        string `sec:"Log" ini:"LogDir"        default:"./log/"         comment:""`
@@ -30,11 +31,12 @@ type AppConfig struct {
 	LogMaxBackups int    `sec:"Log" ini:"LogMaxBackups" default:"6"              comment:"ログローテ：保持するログの最大世代数"`
 
 	// [Proxy]
-	Upstream  string `sec:"Proxy" ini:"Upstream"  default:""  comment:"中継する上位プロキシサーバー(書式：http://name:port)"`
-	User      string `sec:"Proxy" ini:"User"      default:""  comment:"上位プロキシのユーザー名(空なら認証の代行を行いません)"`
-	Pass      string `sec:"Proxy" ini:"Pass"      default:""  comment:"上位プロキシのパスワード"`
-	ProxyPort string `sec:"Proxy" ini:"ProxyPort" default:""  comment:"Proxy中継が待ち受けるポート番号 (空なら自動割り当て)"`
-	LogLevel  int    `sec:"Proxy" ini:"LogLevel"  default:"0" comment:"Proxy中継の追加詳細ログ 0:無効, 1:エラー/警告, 2:1に加えて接続/切断/認証/フィルタ"`
+	Upstream  string `sec:"Proxy" ini:"Upstream"  default:""          comment:"中継する上位プロキシサーバー(書式：http://name:port)"`
+	User      string `sec:"Proxy" ini:"User"      default:""          comment:"上位プロキシのユーザー名(空なら認証の代行を行いません)"`
+	Pass      string `sec:"Proxy" ini:"Pass"      default:""          comment:"上位プロキシのパスワード"`
+	ProxyPort string `sec:"Proxy" ini:"ProxyPort" default:""          comment:"Proxy中継が待ち受けるポート番号 (空なら自動割り当て)"`
+	ProxyAddr string `sec:"Proxy" ini:"ProxyAddr" default:"127.0.0.1" comment:"Proxy中継が待ち受けるアドレス (空なら全アドレス対象)"`
+	LogLevel  int    `sec:"Proxy" ini:"LogLevel"  default:"0"         comment:"Proxy中継の追加詳細ログ 0:無効, 1:エラー/警告, 2:1に加えて接続/切断/認証/フィルタ"`
 
 	// [Pac]
 	PacDownload int    `sec:"Pac" ini:"Download"        default:"0"                 comment:"オリジナルPACの取得 1:有効, 0:無効"`
@@ -42,7 +44,7 @@ type AppConfig struct {
 	PacUrl      string `sec:"Pac" ini:"PacUrl"          default:""                  comment:"オリジナルPACの取得先URL"`
 	HtmlDir     string `sec:"Pac" ini:"HtmlDir"         default:"./html/"           comment:"PACファイルを保存するディレクトリ"`
 	OrigPacName string `sec:"Pac" ini:"OriginalPacName" default:"original.pac"      comment:"オリジナルPACをダウンロード後に保存する名前"`
-	RuleFile    string `sec:"Pac" ini:"RuleFile"        default:"mod_rules.pac"     comment:"PAC改変のルールが記載されたファイル名(./conf/配下)|ルール内で%PORT%は(動的割当を含む)Proxyポート番号"`
+	RuleFile    string `sec:"Pac" ini:"RuleFile"        default:"mod_rules.pac"     comment:"PAC改変のルールが記載されたファイル名(./conf/配下)|ルール内で%PORT%は(動的割当を含む)Proxyポート番号、%ADDR%はProxyのリスナアドレス"`
 	PacPrefix   string `sec:"Pac" ini:"PacPrefix"       default:"__mod_proxyrelay_" comment:"オリジナルのFindProxyForURL関数をリネームする際の接頭辞"`
 	PacName     string `sec:"Pac" ini:"PacName"         default:"proxy.pac"         comment:"OS設定へ配信するPACファイル名(PAC加工が有効な場合は加工後のファイル名)"`
 
@@ -108,6 +110,7 @@ var (
 	prefixRegex   = regexp.MustCompile(`^[a-zA-Z0-9_]+$`)
 	condPortRegex = regexp.MustCompile(`^(\d+)/(tcp|udp)`)
 	condProcRegex = regexp.MustCompile(`^([^:]+):[1-9][0-9]*$`)
+	addrRegex     = regexp.MustCompile(`^(?:\d{1,3}\.){3}\d{1,3}$|^$`)
 )
 
 // バリデーション
@@ -167,10 +170,13 @@ func Validate() error {
 	if err := inRange("General", "AutoStart", 0, 1); err != nil {
 		return err
 	}
-	if err := inRange("General", "NotifyEnable", 0, 1); err != nil {
+	if err := inRange("General", "NotifyEnable", -1, 1); err != nil {
 		return err
 	}
 	if err := isNum("General", "HttpdPort"); err != nil {
+		return err
+	}
+	if err := match("General", "HttpdAddr", addrRegex, true); err != nil {
 		return err
 	}
 	// [Log]
@@ -194,6 +200,9 @@ func Validate() error {
 		return err
 	}
 	if err := inRange("Proxy", "LogLevel", 0, 2); err != nil {
+		return err
+	}
+	if err := match("Proxy", "ProxyAddr", addrRegex, true); err != nil {
 		return err
 	}
 	// [Pac]

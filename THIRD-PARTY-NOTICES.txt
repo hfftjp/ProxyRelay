@@ -29,32 +29,22 @@ This project incorporates components from the projects listed below.
     URL: https://github.com/go-ini/ini
     (c) Chih-Bin (Alvaro) Wei
 
-6.  go-webview2 (github.com/jchv/go-webview2)
-    License: MIT
-    URL: https://github.com/jchv/go-webview2
-    (c) Jonah Ruppert
-
-7.  go-winloader (github.com/jchv/go-winloader)
-    License: MIT
-    URL: https://github.com/jchv/go-winloader
-    (c) Jonah Ruppert
-
-8.  dbus (github.com/godbus/dbus)
+6.  dbus (github.com/godbus/dbus)
     License: BSD-2-Clause
     URL: https://github.com/godbus/dbus
     (c) The godbus Authors
 
-9.  TOML (github.com/BurntSushi/toml)
+7.  TOML (github.com/BurntSushi/toml)
     License: MIT
     URL: https://github.com/BurntSushi/toml
     (c) Andrew Gallant
 
-10. YAML.v2 (gopkg.in/yaml.v2)
+8.  YAML.v2 (gopkg.in/yaml.v2)
     License: Apache License 2.0
     URL: https://github.com/go-yaml/yaml
     (c) Kirill Simonov
 
-11. Chart.js
+9.  Chart.js
     License: MIT
     URL: https://www.chartjs.org/
     (c) Chart.js Contributors

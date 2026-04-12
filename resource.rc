@@ -7,8 +7,8 @@ IDR_MAINICON ICON "icons/icon.ico"
 IDR_MANIFEST 24 "proxyrelay.manifest"
 
 1 VERSIONINFO
-FILEVERSION     1,0,2,0
-PRODUCTVERSION  1,0,2,0
+FILEVERSION     1,0,3,0
+PRODUCTVERSION  1,0,3,0
 FILEFLAGSMASK   0x3fL
 FILEFLAGS       0x0L
 FILEOS          0x40004L
@@ -22,12 +22,12 @@ BEGIN
         BEGIN
             VALUE "CompanyName",      "hfft.jp"
             VALUE "FileDescription",  "ProxyRelay"
-            VALUE "FileVersion",      "1.0.2.0"
+            VALUE "FileVersion",      "1.0.3.0"
             VALUE "InternalName",     "proxyrelay"
             VALUE "LegalCopyright",   "Copyright (C) 2026 hfft.jp"
             VALUE "OriginalFilename", "proxyrelay.exe"
             VALUE "ProductName",      "ProxyRelay"
-            VALUE "ProductVersion",   "1.0.2.0"
+            VALUE "ProductVersion",   "1.0.3.0"
         END
     END
     BLOCK "VarFileInfo"

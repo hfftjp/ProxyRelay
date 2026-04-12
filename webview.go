@@ -1,115 +1,137 @@
 package main
 
 import (
+	"crypto/rand"
 	"fmt"
-	"github.com/jchv/go-webview2"
-	"runtime"
-	"syscall"
+	"golang.org/x/sys/windows"
+	"net/http"
+	"os/exec"
+	"strings"
+	"sync"
 	"unsafe"
 )
 
 var (
-	procLoadImage       = moduser32.NewProc("LoadImageW")
-	procDestroyIcon     = moduser32.NewProc("DestroyIcon")
-	procSendMessage     = moduser32.NewProc("SendMessageW")
-	procFindWindow      = moduser32.NewProc("FindWindowW")
-	procShowWindow      = moduser32.NewProc("ShowWindow")
-	procSetForeground   = moduser32.NewProc("SetForegroundWindow")
-	procGetModuleHandle = modkernel32.NewProc("GetModuleHandleW")
+	procEnumWindows         = moduser32.NewProc("EnumWindows")
+	procGetWindowTextW      = moduser32.NewProc("GetWindowTextW")
+	procSetForegroundWindow = moduser32.NewProc("SetForegroundWindow")
+	procShowWindow          = moduser32.NewProc("ShowWindow")
+	procIsIconic            = moduser32.NewProc("IsIconic")
 )
 
 const (
-	wmSetIcon   = 0x0080
-	iconSmall   = 0
-	iconBig     = 1
-	idrMainIcon = 1
-	SW_RESTORE  = 9
+	SW_RESTORE = 9
 )
 
 var (
-	hIconSmall uintptr
-	hIconBig   uintptr
+	currentSessionID   string
+	oneTimeLaunchKey   string
+	sessionMu          sync.Mutex
+	isLaunchPathActive bool
+	currentLaunchPath  string
 )
 
 // 管理画面の表示
 func openWebView() {
-	windowTitle := APP_NAME // index.htmlの<title>と同じにする
-	if focusExistingWindow(windowTitle) {
+	windowTitle := APP_NAME + " Management"
+	if focusExistingBrowser(windowTitle) {
 		return
 	}
-	if !IsHttpdRun {
-		notify("ERROR", "SYS", "WebUI startup error")
-		if NotifyEnable == 0 {
-			showMessage("ERROR", "SYS", "WebUI startup error")
-		}
+	_, launchPath := RegisterLaunchKey()
+	url := fmt.Sprintf("http://%s:%d%s", getToaddr(CurrentHttpdAddr), CurrentHttpdPort, launchPath)
+	cmd := exec.Command("rundll32", "url.dll,FileProtocolHandler", url)
+	_ = cmd.Start()
+}
+func RegisterLaunchKey() (string, string) {
+	sessionMu.Lock()
+	defer sessionMu.Unlock()
+	oneTimeLaunchKey = generateUUID()
+	currentLaunchPath = "/" + generateUUID()
+	isLaunchPathActive = true
+	return oneTimeLaunchKey, currentLaunchPath
+}
+func generateUUID() string {
+	b := make([]byte, 16)
+	_, _ = rand.Read(b)
+	return fmt.Sprintf("%x%x%x%x", b[0:4], b[4:8], b[8:12], b[12:16])
+}
+
+// 管理画面起動用中継
+func HandleLauncher(w http.ResponseWriter, r *http.Request) {
+	sessionMu.Lock()
+	active := isLaunchPathActive
+	key := oneTimeLaunchKey
+	isLaunchPathActive = false
+	sessionMu.Unlock()
+	if !active {
+		http.Error(w, "Forbidden", http.StatusForbidden)
 		return
 	}
-	url := fmt.Sprintf("http://127.0.0.1:%d/view", getCurrentHttpdPort())
-	go func() {
-		runtime.LockOSThread()
-		defer runtime.UnlockOSThread()
-		w := webview2.NewWithOptions(webview2.WebViewOptions{
-			Debug:     false,
-			AutoFocus: true,
-			WindowOptions: webview2.WindowOptions{
-				Title:  windowTitle,
-				Width:  800,
-				Height: 600,
-				// IconId: 1,
-				Center: true,
-			},
-		})
-		if w == nil {
-			notify("ERROR", "SYS", "WebUI startup error")
-			if NotifyEnable == 0 {
-				showMessage("ERROR", "SYS", "WebUI startup error")
+	targetURL := "/index.html"
+	w.Header().Set("Content-Type", "text/html")
+	fmt.Fprintf(w, `
+	<html>
+	<head>
+		<script>
+			function launch() {
+				window.history.replaceState({}, "", "/");
+				document.forms[0].submit();
 			}
-			return
+		</script>
+	</head>
+	<body onload="launch()">
+		<form method="POST" action="%s">
+			<input type="hidden" name="launch_key" value="%s">
+		</form>
+	</body>
+	</html>`, targetURL, key)
+}
+
+// 管理画面の2重起動防止
+type findWindowContext struct {
+	title  string
+	handle windows.Handle
+}
+
+func focusExistingBrowser(title string) bool {
+	ctx := findWindowContext{title: title}
+	procEnumWindows.Call(windows.NewCallback(enumWindowsCallback), uintptr(unsafe.Pointer(&ctx)))
+	if ctx.handle != 0 {
+		ret, _, _ := procIsIconic.Call(uintptr(ctx.handle))
+		if ret != 0 {
+			procShowWindow.Call(uintptr(ctx.handle), SW_RESTORE)
 		}
-		setWindowIcon(w.Window())
-		w.SetSize(800, 600, webview2.HintFixed)
-		w.Navigate(url)
-		w.Run()
-		destroyIcons()
-		w.Destroy()
-	}()
-}
-
-// 管理画面のWindowアイコン
-func setWindowIcon(hwnd unsafe.Pointer) {
-	if hIconSmall == 0 || hIconBig == 0 {
-		handle, _, _ := procGetModuleHandle.Call(0)
-		hIconSmall, _, _ = procLoadImage.Call(handle, uintptr(idrMainIcon), 1, 16, 16, 0)
-		hIconBig, _, _ = procLoadImage.Call(handle, uintptr(idrMainIcon), 1, 32, 32, 0)
-	}
-	if hIconSmall != 0 {
-		procSendMessage.Call(uintptr(hwnd), wmSetIcon, uintptr(iconSmall), hIconSmall)
-	}
-	if hIconBig != 0 {
-		procSendMessage.Call(uintptr(hwnd), wmSetIcon, uintptr(iconBig), hIconBig)
-	}
-}
-
-// アイコン破棄
-func destroyIcons() {
-	if hIconSmall != 0 {
-		procDestroyIcon.Call(hIconSmall)
-		hIconSmall = 0
-	}
-	if hIconBig != 0 {
-		procDestroyIcon.Call(hIconBig)
-		hIconBig = 0
-	}
-}
-
-// 管理画面の2重起動防止（＋開いていれば最小化解除＋最前面へ）
-func focusExistingWindow(title string) bool {
-	tPtr, _ := syscall.UTF16PtrFromString(title)
-	hwnd, _, _ := procFindWindow.Call(0, uintptr(unsafe.Pointer(tPtr)))
-	if hwnd != 0 {
-		procShowWindow.Call(hwnd, SW_RESTORE)
-		procSetForeground.Call(hwnd)
+		procSetForegroundWindow.Call(uintptr(ctx.handle))
 		return true
 	}
 	return false
+}
+func enumWindowsCallback(hwnd windows.Handle, lParam uintptr) uintptr {
+	ctx := (*findWindowContext)(unsafe.Pointer(lParam))
+	b := make([]uint16, 512)
+	ret, _, _ := procGetWindowTextW.Call(uintptr(hwnd), uintptr(unsafe.Pointer(&b[0])), uintptr(len(b)))
+	if ret == 0 {
+		return 1
+	}
+	title := windows.UTF16ToString(b)
+	if strings.Contains(title, ctx.title) {
+		ctx.handle = hwnd
+		return 0
+	}
+	return 1
+}
+func ExchangeSession(key string) (string, bool) {
+	sessionMu.Lock()
+	defer sessionMu.Unlock()
+	if oneTimeLaunchKey == "" || key != oneTimeLaunchKey {
+		return "", false
+	}
+	oneTimeLaunchKey = ""
+	currentSessionID = generateUUID()
+	return currentSessionID, true
+}
+func IsValidSession(token string) bool {
+	sessionMu.Lock()
+	defer sessionMu.Unlock()
+	return token != "" && token == currentSessionID
 }

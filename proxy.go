@@ -143,11 +143,8 @@ func monitorTraffic() {
 		copy(HistoryRecv, HistoryRecv[1:])
 		HistoryRecv[historyMax-1] = r
 		if IsProxyRun {
-			if s > 1024 || r > 1024 {
-				setBusyIcon()
-			} else {
-				updateIcon()
-			}
+			IsBusy = (s > 1024 || r > 1024)
+			requestIconUpdate()
 		}
 	}
 }
@@ -156,6 +153,10 @@ func monitorTraffic() {
 func writeProxyLog(outputLevel int, level, message string, v ...interface{}) {
 	if LogLevel >= outputLevel {
 		logOutput(level, "Proxy", message, v...)
+		switch level {
+		case "ERROR", "WARNING":
+			ErrorNotice = true
+		}
 	}
 }
 
@@ -179,6 +180,7 @@ func getCurrentProxyPort() int {
 		port, _ = strconv.Atoi(portStr)
 	}
 	CurrentProxyPort = port
+	CurrentProxyAddr = GetStringSafe(cfg.Section("Proxy").Key("ProxyAddr"))
 	return CurrentProxyPort
 }
 
@@ -191,8 +193,7 @@ func startProxyRelay() bool {
 		return false
 	}
 	loadAccessLists()
-	port := getCurrentProxyPort()
-	if port == 0 {
+	if getCurrentProxyPort() == 0 {
 		return false
 	}
 	upstreamRaw := GetStringSafe(cfg.Section("Proxy").Key("Upstream"))
@@ -214,7 +215,7 @@ func startProxyRelay() bool {
 		handleHTTP(w, r, tr)
 	})
 	proxyServer = &http.Server{
-		Addr:              ":" + strconv.Itoa(CurrentProxyPort),
+		Addr:              CurrentProxyAddr + ":" + strconv.Itoa(CurrentProxyPort),
 		Handler:           handler,
 		ReadTimeout:       30 * time.Second,
 		WriteTimeout:      30 * time.Second,
@@ -222,14 +223,14 @@ func startProxyRelay() bool {
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 	IsProxyRun = true
-	updateIcon()
+	requestIconUpdate()
 	refreshMenu()
 	go func() {
-		notify("INFO", "Proxy", "Started. (Port:"+strconv.Itoa(CurrentProxyPort)+")")
+		notify("INFO", "Proxy", "Started. ("+CurrentProxyAddr+":"+strconv.Itoa(CurrentProxyPort)+")")
 		err := proxyServer.ListenAndServe()
 		if err != nil && err != http.ErrServerClosed {
 			IsProxyRun = false
-			updateIcon()
+			requestIconUpdate()
 			refreshMenu()
 			notify("ERROR", "Proxy", err.Error())
 		}
@@ -245,10 +246,8 @@ func stopProxyRelay() bool {
 		proxyServer.Shutdown(ctx)
 		proxyServer = nil
 		IsProxyRun = false
-		if !SkipTrayUpdate {
-			updateIcon()
-			refreshMenu()
-		}
+		requestIconUpdate()
+		refreshMenu()
 		notify("INFO", "Proxy", "Stopped.")
 	}
 	return true

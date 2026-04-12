@@ -111,10 +111,16 @@ func setRegistryOn() bool {
 	switch mode {
 	case 1:
 		pac := GetStringSafe(cfg.Section("Pac").Key("PacName"), "proxy.pac")
-		s = RegState{Enable: 0, PAC: fmt.Sprintf("http://127.0.0.1:%s/%s", strconv.Itoa(getCurrentHttpdPort()), pac)}
+		if getCurrentHttpdPort() == 0 {
+			return false
+		}
+		s = RegState{Enable: 0, PAC: fmt.Sprintf("http://%s:%s/%s", getToaddr(CurrentHttpdAddr), strconv.Itoa(CurrentHttpdPort), pac)}
 	case 2:
 		override := GetStringSafe(cfg.Section("RegAction").Key("ProxyOverride"))
-		s = RegState{Enable: 1, Server: "127.0.0.1:" + strconv.Itoa(getCurrentProxyPort()), Override: override}
+		if getCurrentProxyPort() == 0 {
+			return false
+		}
+		s = RegState{Enable: 1, Server: getToaddr(CurrentProxyAddr) + ":" + strconv.Itoa(CurrentProxyPort), Override: override}
 	}
 	applyRegistry(s)
 	notify("INFO", "REG", "Proxy settings have been changed.")

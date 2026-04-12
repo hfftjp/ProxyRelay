@@ -67,7 +67,13 @@ func modifySavedPac() bool {
 		return false
 	}
 	useCRLF := bytes.Contains(content, []byte("\r\n"))
-	rules := strings.ReplaceAll(string(rulesRaw), "%PORT%", strconv.Itoa(getCurrentProxyPort()))
+	if getCurrentProxyPort() == 0 {
+		return false
+	}
+	rules := strings.NewReplacer(
+		"%PORT%", strconv.Itoa(CurrentProxyPort),
+		"%ADDR%", getToaddr(CurrentProxyAddr),
+	).Replace(string(rulesRaw))
 	prefix := GetStringSafe(cfg.Section("Pac").Key("PacPrefix"), "__mod_proxyrelay_")
 	re := regexp.MustCompile(`(?m)^([ \t]*)function([ \t]+)FindProxyForURL([ \t]*\()`)
 	modified := re.ReplaceAllString(string(content), "${1}function${2}"+prefix+"FindProxyForURL${3}")
@@ -82,6 +88,6 @@ func modifySavedPac() bool {
 		logOutput("ERROR", "PAC", "Modification failed. %v", err)
 		return false
 	}
-	logOutput("LOG", "PAC", "Modification completed. (Port:"+strconv.Itoa(CurrentProxyPort)+")")
+	logOutput("LOG", "PAC", "Modification completed. ("+CurrentProxyAddr+":"+strconv.Itoa(CurrentProxyPort)+")")
 	return true
 }
