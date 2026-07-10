@@ -208,6 +208,27 @@ func onReady() {
 			})
 		}
 	}
+	for i := 1; i <= 3; i++ {
+		id := fmt.Sprintf("%d", i)
+		key := cfg.Section("Bat").Key(id + "Bat")
+		if GetStringSafe(key) != "" {
+			titleKey := fmt.Sprintf("%sTitle", id)
+			title := toUTF8(GetStringSafe(cfg.Section("Bat").Key(titleKey)))
+			if len(title) > 0 {
+				displayTitle := truncateString(title, 10)
+				mBat := systray.AddMenuItem(displayTitle, "")
+				currentID := id
+				currentTitle := displayTitle
+				mBat.Click(func() {
+					go func(targetID string, targetTitle string) {
+						if !runBatWithConfig(targetID) {
+							showLogMBox("ERROR", targetTitle)
+						}
+					}(currentID, currentTitle)
+				})
+			}
+		}
+	}
 	mSubMaintenance := systray.AddMenuItem("メンテナンス", "")
 	mHttpdRestart := mSubMaintenance.AddSubMenuItem("Httpd再起動", "")
 	mHttpdRestart.Click(func() {

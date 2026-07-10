@@ -99,6 +99,13 @@ type AppConfig struct {
 	PostStopWaitNot  string `sec:"Hook" ini:"PostStopWaitNot"    default:"" comment:""`
 	PostStopWaitPort string `sec:"Hook" ini:"PostStopWaitPort"   default:"" comment:""`
 	PostStopWaitProc string `sec:"Hook" ini:"PostStopWaitProc"   default:"" comment:""`
+
+	Bat1Bat   string `sec:"Bat" ini:"1Bat"      default:"" comment:""`
+	Bat1Title string `sec:"Bat" ini:"1Title"    default:"" comment:""`
+	Bat2Bat   string `sec:"Bat" ini:"2Bat"      default:"" comment:""`
+	Bat2Title string `sec:"Bat" ini:"2Title"    default:"" comment:""`
+	Bat3Bat   string `sec:"Bat" ini:"3Bat"      default:"" comment:""`
+	Bat3Title string `sec:"Bat" ini:"3Title"    default:"" comment:""`
 }
 
 var (
@@ -254,6 +261,13 @@ func Validate() error {
 			return err
 		}
 		if err := match("Hook", name+"WaitProc", condProcRegex, true); err != nil {
+			return err
+		}
+	}
+	// [Bat]
+	batNames := []string{"1", "2", "3"}
+	for _, name := range batNames {
+		if err := match("Bat", name+"Bat", fileNameRegex, true); err != nil {
 			return err
 		}
 	}

@@ -63,7 +63,62 @@ var (
 	hookDone       chan struct{}
 )
 
-// BAT実行
+// BAT実行(Bat)
+func runBatWithConfig(prefix string) bool {
+	if !ReloadCfg() {
+		return false
+	}
+	sec := cfg.Section("Bat")
+	batFile := GetStringSafe(sec.Key(prefix + "Bat"))
+	if batFile == "" {
+		return true
+	}
+	batTitle := toUTF8(GetStringSafe(sec.Key(prefix + "Title")))
+	if !showConfirmDialog(batTitle + "を実行してもよろしいですか？") {
+		return true
+	}
+	notify("INFO", prefix+"Bat", "Processing")
+	path := filepath.Join(CONF_DIR, batFile)
+	tmpPath := filepath.Join(LogDir, fmt.Sprintf("proxyrelay_bat_out_%d.log", time.Now().UnixNano()))
+	ptrPath, _ := syscall.UTF16PtrFromString(tmpPath)
+	h, err := syscall.CreateFile(ptrPath, syscall.GENERIC_READ|syscall.GENERIC_WRITE,
+		syscall.FILE_SHARE_READ|syscall.FILE_SHARE_WRITE|FILE_SHARE_DELETE,
+		nil, syscall.CREATE_ALWAYS, FILE_ATTRIBUTE_TEMPORARY, 0)
+	if err != nil {
+		logOutput("ERROR", prefix+"Bat", "Failed to create temp file: %v", err)
+		return false
+	}
+	tmpFile := os.NewFile(uintptr(h), tmpPath)
+	defer os.Remove(tmpPath)
+	cmd := exec.Command("cmd.exe", "/c", path)
+	cmd.Stdout = tmpFile
+	cmd.Stderr = tmpFile
+	cmd.Stdin = nil
+	cmd.SysProcAttr = &syscall.SysProcAttr{
+		HideWindow: true,
+	}
+	runErr := cmd.Run()
+	tmpFile.Close()
+	output, readErr := os.ReadFile(tmpPath)
+	if readErr == nil && len(output) > 0 {
+		outStr := strings.TrimSpace(autoDecode(output))
+		lines := regexp.MustCompile(`\r?\n`).Split(outStr, -1)
+		for _, line := range lines {
+			if strings.TrimSpace(line) != "" {
+				logOutput("LOG", prefix+"Bat", line)
+			}
+		}
+	}
+	os.Remove(tmpPath)
+	if runErr != nil {
+		notify("ERROR", prefix+"Bat", "Aborted")
+		return false
+	}
+	notify("INFO", prefix+"Bat", "Done")
+	return true
+}
+
+// BAT実行(Hook)
 func runHookWithConfig(prefix string) bool {
 	if !ReloadCfg() {
 		return false
